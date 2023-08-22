@@ -1,6 +1,6 @@
 # OctoPrint-Octocmm
 
-**TODO:** Describe what your plugin does.
+**TODO:** Octoprint plugin that enables the use of the 3d printer gantry as a CMM machine
 
 ## Setup
 
