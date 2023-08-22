@@ -2,7 +2,8 @@ import octoprint.plugin
 
 class OctoCMMPlugin(octoprint.plugin.StartupPlugin,
                     octoprint.plugin.TemplatePlugin,
-                    octoprint.plugin.SettingsPlugin):
+                    octoprint.plugin.SettingsPlugin,
+                    octoprint.plugin.AssetPlugin):
     def on_after_startup(self):
         #runs after plugin startup
         self._logger.info("OctoCMM Plugin! (URL: %s)" % self._settings.get(["url"]))
@@ -16,6 +17,10 @@ class OctoCMMPlugin(octoprint.plugin.StartupPlugin,
             dict(type="navbar", custom_bindings=False),
             dict(type="settings", custom_bindings=False)
         ]
+    def get_assets(self):
+        return dict(
+            js=["js/OctoCMM.js"]
+        )
 
 __plugin_name__ = "OctoCMM"
 __plugin_pythoncompat__ = ">=3.7,<4"
