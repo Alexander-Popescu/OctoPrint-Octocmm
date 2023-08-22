@@ -1,6 +1,7 @@
 import octoprint.plugin
 
-class OctoCMMPlugin(octoprint.plugin.StartupPlugin):
+class OctoCMMPlugin(octoprint.plugin.StartupPlugin,
+                    octoprint.plugin.TemplatePlugin):
     def on_after_startup(self):
         self._logger.info("Console Log from OctoCMM plugin!")
 
