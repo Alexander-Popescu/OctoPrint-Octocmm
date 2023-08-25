@@ -2,7 +2,7 @@ $(function() {
     function OctoCMMViewModel(parameters) {
     
 
-    var cmm_data = ko.observable("State: x | LastPos: x,x,x");
+    self.cmm_state = ko.observable("Press Update Vars to get latest state");
 
     self.Run_CMM_Probing_JS = function() {
         console.log("Run_CMM_Probing_JS function called");
@@ -49,7 +49,7 @@ $(function() {
             contentType: "application/json; charset=UTF-8"
         }).done(function(result) {
             console.log("Result:", result);
-            data = result;
+            self.cmm_state(result.result);
         }).fail(function(jqXHR, textStatus, errorThrown) {
             console.error("Error:", errorThrown);
         });

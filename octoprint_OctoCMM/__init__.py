@@ -66,7 +66,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"State: {self.cmmState}, LastPos: {self.lastProbedPoint}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}"
             ))
         else:
             return jsonify(dict(
