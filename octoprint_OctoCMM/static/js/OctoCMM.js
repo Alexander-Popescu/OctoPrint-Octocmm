@@ -53,7 +53,22 @@ $(function() {
         }).fail(function(jqXHR, textStatus, errorThrown) {
             console.error("Error:", errorThrown);
         });
-        
+    }
+
+    self.Home_Printer_JS = function() {
+        console.log("Home_Printer_JS function called");
+
+        $.ajax({
+            url: "/api/plugin/OctoCMM",
+            type: "GET",
+            dataType: "json",
+            data: {command: "home_printer"},
+            contentType: "application/json; charset=UTF-8"
+        }).done(function(result) {
+            console.log("Result:", result);
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Error:", errorThrown);
+        });
     }
 
     OCTOPRINT_VIEWMODELS.push([

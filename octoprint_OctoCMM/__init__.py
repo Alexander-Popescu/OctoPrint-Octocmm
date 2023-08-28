@@ -94,10 +94,35 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                 result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}"
             ))
 
+        elif request.args.get("command") == "home_printer":
+            self._logger.info("home_printer")
+            self.cmmState = "Homing"
+            self._logger.info(f"Current CMM state {self.cmmState}")
+            self.home_printer()
+            self.cmmState = "Idle"
+            return jsonify(dict(
+                status="success",
+                result="home_printer"
+            ))
+
         else:
             return jsonify(dict(
                 status="error, unknown command"
             ))
+
+    def home_printer(self):
+        self.ok_response = False
+        self._logger.info("Homing Printer funtion called")
+        self._printer.commands("G28")
+        while not self.ok_response:
+            pass
+
+        #move printer up to slide in part
+        self.ok_response = False
+        self._printer.commands(f"G1 {maxPartHeight + 50}")
+        while not self.ok_response:
+            pass
+        return
 
     def Run_CMM_Probing(self):
         #get settings
@@ -111,14 +136,27 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("Printer is not connected, cannot run probing")
             return
 
-        probing_mode = self._settings.get(["probing_mode"])
-        output_file_name = self._settings.get(["output_file_name"])
-
-        self.lastProbedPoint[0] += 1
-        # Code for running CMM probing
         self._logger.info(f"Running Run_CMM_Probing function with probing mode {probing_mode} and output file name {output_file_name}")
         self._logger.info(f"lastProbedPoint {self.lastProbedPoint}")
-        pass
+
+        #check z height of printhead, wait to move if not there
+        CurrentHeadPosition = self.Get_Head_Position()
+        if CurrentHeadPosition[2] != maxPartHeight + 25:
+            self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
+            self.ok_response = False
+            self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+            while not self.ok_response:
+                pass
+        
+        if probing_mode == 'default':
+            #run default probing routine
+            self._logger.info("Running default probing routine")
+            self.Run_Default_Probing()
+        else:
+            #run custom probing routine
+            self._logger.info("Not Default, looking for custom probing routine")
+    
+        return
 
     def Probe_Current_Position(self):
         #get settings
@@ -156,6 +194,13 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         #write recent probe to file and update frontend var
         self.Write_To_File(CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2], CurrentHeadPosition[3], CurrentHeadPosition[4], CurrentHeadPosition[5])
         self.lastProbedPoint = {CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2]}
+
+        #move printhead back up to the safe z level
+        self.ok_response = False
+        self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+        while not self.ok_response:
+            pass
+        
         return
 
     def Get_Head_Position(self):
