@@ -19,4 +19,11 @@
         </div>
         <p>True or False, True means that nothing will be written to the disk, for testing reasons</p>
     </div>
+    <div class="control-group">
+        <label class="control-label">{{ _('maxPartHeight') }}</label>
+        <div class="controls">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.OctoCMM.maxPartHeight">
+        </div>
+        <p>the height of the highest level of the part to measure,in mm, probe will stay above this unless probing to prevent crashing into things</p>
+    </div>
 </form>

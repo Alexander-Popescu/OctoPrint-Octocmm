@@ -14,18 +14,27 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
     def on_after_startup(self):
         self._logger.info("OctoCmm loaded!")
+        #state used to indicate to the frontend
         self.cmmState = "Idle"
+        #also frontend variable
         self.lastProbedPoint = [0,0,0]
+        #internal most recent headposition location
+        self.headpos = [0,0,0,0,0,0]
+        #api key for sending commands to printer
         self.APIKEY = self._settings.global_get(["api","key"])
+        #flags for certain gcodes since we have to parse manually
         self.m114_parse = False
+        self.g30_response = False
         self.ok_response = False
 
         
     def get_settings_defaults(self):
+        #settings used internally and configurable in the settings tab of octoprint
         return dict(
             probing_mode="default",
             output_file_name="output.csv",
-            noWrite='False'
+            noWrite='False',
+            maxPartHeight=50,#in millimeters
         )
 
     def get_template_configs(self):
@@ -44,13 +53,16 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         )
 
     def on_api_get(self, request):
+        #using get requests to do things because post wouldnt work for some reason
 
+        #check if cmm is open to commands
         if self.cmmState != "Idle":
             return jsonify(dict(
                 status="CMM is Busy",
                 result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}"
             ))
 
+        #runs overall probing function
         if request.args.get("command") == "start_probing":
             self._logger.info("start_probing")
             self.cmmState = "FullProbing"
@@ -60,8 +72,9 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             return jsonify(dict(
                 status="success",
                 result="start_probing"
-            ))
-
+            )) 
+            
+        #runs single point probing function
         elif request.args.get("command") == "probe_current_position":
             self._logger.info("probe_current_position")
             self.cmmState = "SinglePointProbing"
@@ -73,11 +86,12 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                 result="probe_current_position"
             ))
 
+        #updates frontend with variable valuess
         elif request.args.get("command") == "update_vars":
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}"
             ))
 
         else:
@@ -86,6 +100,13 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             ))
 
     def Run_CMM_Probing(self):
+        #get settings
+        output_file_name = self._settings.get(["output_file_name"])
+        probing_mode = self._settings.get(["probing_mode"])
+        noWrite = self._settings.get(["noWrite"])
+        maxPartHeight = self._settings.get(["maxPartHeight"])
+
+        #check if printer connected
         if not self._printer.is_operational():
             self._logger.info("Printer is not connected, cannot run probing")
             return
@@ -100,25 +121,41 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         pass
 
     def Probe_Current_Position(self):
+        #get settings
         output_file_name = self._settings.get(["output_file_name"])
+        probing_mode = self._settings.get(["probing_mode"])
+        noWrite = self._settings.get(["noWrite"])
+        maxPartHeight = self._settings.get(["maxPartHeight"])
 
         #check if printer connected
         if not self._printer.is_operational():
             self._logger.info("Printer is not connected, cannot probe current position")
             return
 
-        # Code for probing current position
-        self._logger.info(f"Running Probe_Current_Position function with output file name {output_file_name}")
+        self._logger.info(f"Running Probe_Current_Position function with output file name {output_file_name}, probing mode {probing_mode}, and noWrite mode {noWrite}, with max part height {maxPartHeight}")
+
+        #check z height of printhead, wait to move if not there
+        CurrentHeadPosition = self.Get_Head_Position()
+        if CurrentHeadPosition[2] != maxPartHeight + 25:
+            self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
+            self.ok_response = False
+            self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+            while not self.ok_response:
+                pass
 
         #run probe command and wait for it to finish completely
-        self.ok_response = False
+        self.g30_response = False
         self._printer.commands("G30")
-        while not self.ok_response:
+        while not self.g30_response:
             pass
 
-        headPos = self.Get_Head_Position()
-        #headposition calls m114, which is parsed by the parsing function and that writes it to the file, so we are done here
-        self._logger.info(f"Head Position: {headPos}")
+        #now that we hit something, record the probed position
+        CurrentHeadPosition = self.Get_Head_Position()
+        self._logger.info(f"Head Position after G30: {CurrentHeadPosition}")
+
+        #write recent probe to file and update frontend var
+        self.Write_To_File(CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2], CurrentHeadPosition[3], CurrentHeadPosition[4], CurrentHeadPosition[5])
+        self.lastProbedPoint = {CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2]}
         return
 
     def Get_Head_Position(self):
@@ -141,8 +178,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         while not self.m114_parse:
             pass
         
-        #since the parsing function updated the lastprobedpoint to what it detected, we can return it here
-        return self.lastProbedPoint
+        #return updated headpos
+        return self.headpos
 
     
     def Write_To_File(self, x_value, y_value, z_value, a_value, b_value, c_value):
@@ -176,14 +213,17 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info(f"Received M114 response: {line}")
             self.parse_m114_response(line)
             return line
-        else:
-            #check if the entire response just says ok
-            pattern = r"ok"
-            if re.match(pattern, line):
-                self.ok_response = True
-                return line
-            else:
-                return line
+
+        pattern = r"ok X:\d{1,4}\.\d{1,4} Y:\d{1,4}\.\d{1,4} Z:\d{1,4}\.\d{1,4} E:\d{1,4}\.\d{1,4} Count: A:\d{1,4} B:\d{1,4} C:\d{1,4}"
+        if re.match(pattern, line):
+            #G30 return code, ignore for now and set flag
+            self._logger.info(f"Received G30 response: {line}")
+            self.g30_response = True
+
+        pattern = r"ok"
+        if re.match(pattern, line):
+            self.ok_response = True
+            return line
 
     def parse_m114_response(self, line):
         x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
@@ -192,10 +232,9 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         a_value = re.search(r"A:(\d+)", line).group(1)
         b_value = re.search(r"B:(\d+)", line).group(1)
         c_value = re.search(r"C:(\d+)", line).group(1)
-        self._logger.info(f"X: {x_value}, Y: {y_value}, Z: {z_value}")
-        self.Write_To_File(x_value, y_value, z_value, a_value, b_value, c_value)
-        self.lastProbedPoint = [x_value, y_value, z_value]
-        self._logger.info(f"lastProbedPoint from parse_m114 {self.lastProbedPoint}")
+        self._logger.info(f"M114 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
+        self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
+        self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
         self.m114_parse = True
 
     def get_assets(self):
