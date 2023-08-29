@@ -232,7 +232,10 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if self._settings.get(["noWrite"]) == True:
             self._logger.info("noWrite mode is on, not writing to file")
             return
-        output_file_name = "OctoCMM_{}".format(self._settings.get(["output_file_name"]))
+        output_dir = os.path.join(os.getcwd(), "OctoCMM")
+        if not os.path.exists(output_dir):
+            os.mkdir(output_dir)
+        output_file_name = "OctoCMM/OctoCMM_{}".format(self._settings.get(["output_file_name"]))
         #check if file exists, if not create one
         if not os.path.exists(output_file_name):
             self._logger.info(f"File {output_file_name} does not exist, creating it now, directory: {os.getcwd()}")
