@@ -26,4 +26,11 @@
         </div>
         <p>the height of the highest level of the part to measure,in mm, probe will stay above this unless probing to prevent crashing into things</p>
     </div>
+    <div class="control-group">
+        <label class="control-label">{{ _('partHeightBuffer') }}</label>
+        <div class="controls">
+            <input type="text" class="input-block-level" data-bind="value: settings.plugins.OctoCMM.partHeightBuffer">
+        </div>
+        <p>millimeters probe will sit above the max part height</p>
+    </div>
 </form>

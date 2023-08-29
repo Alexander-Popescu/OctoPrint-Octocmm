@@ -35,6 +35,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             output_file_name="output.csv",
             noWrite='False',
             maxPartHeight=50,#in millimeters
+            partHeightBuffer=10,#in millimeters
         )
 
     def get_template_configs(self):
@@ -91,7 +92,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}"
             ))
 
         elif request.args.get("command") == "home_printer":
@@ -111,6 +112,14 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             ))
 
     def home_printer(self):
+        maxPartHeight = self._settings.get(["maxPartHeight"])
+
+        #move printer up 10 mm
+        self.ok_response = False
+        self._printer.commands(f"G1 Z10")
+        while not self.ok_response:
+            pass
+
         self.ok_response = False
         self._logger.info("Homing Printer funtion called")
         self._printer.commands("G28")
@@ -119,7 +128,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printer up to slide in part
         self.ok_response = False
-        self._printer.commands(f"G1 {maxPartHeight + 50}")
+        height = str(maxPartHeight + 50)
+        self._printer.commands(f"G1 {height}")
         while not self.ok_response:
             pass
         return
@@ -130,6 +140,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         probing_mode = self._settings.get(["probing_mode"])
         noWrite = self._settings.get(["noWrite"])
         maxPartHeight = self._settings.get(["maxPartHeight"])
+        partHeightBuffer = self._settings.get(["partHeightBuffer"])
 
         #check if printer connected
         if not self._printer.is_operational():
@@ -141,20 +152,61 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #check z height of printhead, wait to move if not there
         CurrentHeadPosition = self.Get_Head_Position()
-        if CurrentHeadPosition[2] != maxPartHeight + 25:
+        if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+            self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
             while not self.ok_response:
                 pass
+
+        input_coords = [[0,0]]
         
         if probing_mode == 'default':
             #run default probing routine
             self._logger.info("Running default probing routine")
-            self.Run_Default_Probing()
+            input_coords = [[25,25],[50,50],[100,100],[150,150]]
+            self._logger.info(f"Default probing routine coords: {input_coords}")
         else:
             #run custom probing routine
             self._logger.info("Not Default, looking for custom probing routine")
+            #look for OctoCMM_probing_mode file in the octocmm folder
+            custom_file_name = f"OctoCMM/OctoCMM_{probing_mode}.csv"
+            if not os.path.exists(custom_file_name):
+                self._logger.info(f"Custom probing file {custom_file_name} does not exist, returning")
+                return
+            #read in file and parse coords
+            self._logger.info(f"Reading in custom probing file {custom_file_name}")
+            with open(custom_file_name, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if line[0] == '#':
+                        continue
+                    else:
+                        line = line.strip()
+                        line = line.split(',')
+                        input_coords.append([line[0], line[1]])
+                f.close()
+            self._logger.info(f"Custom probing file {custom_file_name} read in, coords: {input_coords}")
+
+        #run through coords and probe for actual procedure
+        for coordinate in input_coords:
+            #move to coordinate
+            self.ok_response = False
+            self._printer.commands(f"G1 X{coordinate[0]} Y{coordinate[1]}")
+            while not self.ok_response:
+                pass
+
+            #probe current position
+            self.Probe_Current_Position()
+
+            #check printhead z height just in case
+            CurrentHeadPosition = self.Get_Head_Position()
+            if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
+                self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
+                self.ok_response = False
+                self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
+                while not self.ok_response:
+                    pass
     
         return
 
@@ -164,6 +216,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         probing_mode = self._settings.get(["probing_mode"])
         noWrite = self._settings.get(["noWrite"])
         maxPartHeight = self._settings.get(["maxPartHeight"])
+        partHeightBuffer = self._settings.get(["partHeightBuffer"])
 
         #check if printer connected
         if not self._printer.is_operational():
@@ -174,12 +227,13 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #check z height of printhead, wait to move if not there
         CurrentHeadPosition = self.Get_Head_Position()
-        if CurrentHeadPosition[2] != maxPartHeight + 25:
+        if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+            self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
             while not self.ok_response:
                 pass
+        return
 
         #run probe command and wait for it to finish completely
         self.g30_response = False
@@ -197,7 +251,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printhead back up to the safe z level
         self.ok_response = False
-        self._printer.commands(f"G1 Z{maxPartHeight + 25}")
+        self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
         while not self.ok_response:
             pass
         
@@ -252,24 +306,26 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             write_var = f"{x_value},{y_value},{z_value},{a_value},{b_value},{c_value},{datetime.datetime.now().strftime('%H:%M:%S')}\n"
             f.write(write_var)
             f.close()
+        return
 
     def parse_gcode_responses(self, comm, line, *args, **kwargs):
         #checks for M114 response
         pattern = r"ok X:\d+\.\d{1,4} Y:\d+\.\d{1,4} Z:\d+\.\d{1,4} E:\d+\.\d{1,4} Count: A:\d+ B:\d+ C:\d+"
-        if re.match(pattern, line):
+        if re.match(pattern, line) and self.m114_parse == False:
             #parse line for x,y,z values
             self._logger.info(f"Received M114 response: {line}")
             self.parse_m114_response(line)
             return line
 
         pattern = r"ok X:\d{1,4}\.\d{1,4} Y:\d{1,4}\.\d{1,4} Z:\d{1,4}\.\d{1,4} E:\d{1,4}\.\d{1,4} Count: A:\d{1,4} B:\d{1,4} C:\d{1,4}"
-        if re.match(pattern, line):
+        if re.match(pattern, line) and self.g30_response == False:
             #G30 return code, ignore for now and set flag
             self._logger.info(f"Received G30 response: {line}")
             self.g30_response = True
+            return line
 
         pattern = r"ok"
-        if re.match(pattern, line):
+        if re.match(pattern, line) and self.ok_response == False:
             self.ok_response = True
             return line
 
@@ -284,6 +340,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
         self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
         self.m114_parse = True
+        return
 
     def get_assets(self):
         return dict(
