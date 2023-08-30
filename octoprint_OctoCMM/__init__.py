@@ -307,6 +307,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             f.write(write_var)
             f.close()
         return
+        
+#something below here is causing virtual printer to not work, investigate later
 
     def parse_gcode_responses(self, comm, line, *args, **kwargs):
         #checks for M114 response
@@ -349,7 +351,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
 __plugin_name__ = "OctoCmm"
 __plugin_pythoncompat__ = ">=3.7,<4"
-#IMPORTANT: Make sure the marlin firmware has M114_REALTIME enabled and G38_PROBE_TARGET with the BLtouch probe defined
+#IMPORTANT: Make sure the marlin firmware has M114_REALTIME enabled with the BLtouch probe defined
 
 def __plugin_load__():
 	global __plugin_implementation__
