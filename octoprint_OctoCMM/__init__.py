@@ -308,41 +308,46 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             f.close()
         return
         
-#something below here is causing virtual printer to not work, investigate later
-
     def parse_gcode_responses(self, comm, line, *args, **kwargs):
         #checks for M114 response
+
         pattern = r"ok X:\d+\.\d{1,4} Y:\d+\.\d{1,4} Z:\d+\.\d{1,4} E:\d+\.\d{1,4} Count: A:\d+ B:\d+ C:\d+"
         if re.match(pattern, line) and self.m114_parse == False:
             #parse line for x,y,z values
             self._logger.info(f"Received M114 response: {line}")
-            self.parse_m114_response(line)
-            return line
+            x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
+            y_value = re.search(r"Y:(\d+\.\d{1,2})", line).group(1)
+            z_value = re.search(r"Z:(\d+\.\d{1,2})", line).group(1)
+            a_value = re.search(r"A:(\d+)", line).group(1)
+            b_value = re.search(r"B:(\d+)", line).group(1)
+            c_value = re.search(r"C:(\d+)", line).group(1)
+            self._logger.info(f"M114 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
+            self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
+            self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
+            self.m114_parse = True
+            return
 
         pattern = r"ok X:\d{1,4}\.\d{1,4} Y:\d{1,4}\.\d{1,4} Z:\d{1,4}\.\d{1,4} E:\d{1,4}\.\d{1,4} Count: A:\d{1,4} B:\d{1,4} C:\d{1,4}"
         if re.match(pattern, line) and self.g30_response == False:
             #G30 return code, ignore for now and set flag
             self._logger.info(f"Received G30 response: {line}")
+            x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
+            y_value = re.search(r"Y:(\d+\.\d{1,2})", line).group(1)
+            z_value = re.search(r"Z:(\d+\.\d{1,2})", line).group(1)
+            a_value = re.search(r"A:(\d+)", line).group(1)
+            b_value = re.search(r"B:(\d+)", line).group(1)
+            c_value = re.search(r"C:(\d+)", line).group(1)
+            self._logger.info(f"G30 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
+            self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
+            self._logger.info(f"recent headpos from parse_g30 {self.headpos}")
             self.g30_response = True
-            return line
+            return
 
         pattern = r"ok"
         if re.match(pattern, line) and self.ok_response == False:
             self.ok_response = True
-            return line
-
-    def parse_m114_response(self, line):
-        x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
-        y_value = re.search(r"Y:(\d+\.\d{1,2})", line).group(1)
-        z_value = re.search(r"Z:(\d+\.\d{1,2})", line).group(1)
-        a_value = re.search(r"A:(\d+)", line).group(1)
-        b_value = re.search(r"B:(\d+)", line).group(1)
-        c_value = re.search(r"C:(\d+)", line).group(1)
-        self._logger.info(f"M114 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
-        self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
-        self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
-        self.m114_parse = True
-        return
+            return
+        return line
 
     def get_assets(self):
         return dict(
@@ -354,10 +359,10 @@ __plugin_pythoncompat__ = ">=3.7,<4"
 #IMPORTANT: Make sure the marlin firmware has M114_REALTIME enabled with the BLtouch probe defined
 
 def __plugin_load__():
-	global __plugin_implementation__
-	__plugin_implementation__ = OctoCmmPlugin()
+    global __plugin_implementation__
+    __plugin_implementation__ = OctoCmmPlugin()
 
-	global __plugin_hooks__
-	__plugin_hooks__ = {
-		"octoprint.comm.protocol.gcode.received": __plugin_implementation__.parse_gcode_responses
-	}
+    global __plugin_hooks__
+    __plugin_hooks__ = {
+        "octoprint.comm.protocol.gcode.received": __plugin_implementation__.parse_gcode_responses
+    }
