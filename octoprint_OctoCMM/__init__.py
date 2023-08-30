@@ -128,7 +128,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printer up to slide in part
         self.ok_response = False
-        height = str(maxPartHeight + 50)
+        height = maxPartHeight + 50
         self._printer.commands(f"G1 {height}")
         while not self.ok_response:
             pass
@@ -155,7 +155,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
+            self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
             while not self.ok_response:
                 pass
 
@@ -204,7 +204,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
                 self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
                 self.ok_response = False
-                self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
+                self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
                 while not self.ok_response:
                     pass
     
@@ -230,7 +230,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
+            self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
             while not self.ok_response:
                 pass
         return
@@ -251,7 +251,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printhead back up to the safe z level
         self.ok_response = False
-        self._printer.commands(f"G1 Z{str(maxPartHeight + partHeightBuffer)}")
+        self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
         while not self.ok_response:
             pass
         
