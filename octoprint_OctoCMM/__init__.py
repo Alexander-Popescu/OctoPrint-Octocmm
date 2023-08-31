@@ -118,6 +118,14 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if not self._printer.is_operational():
             self._logger.info("Printer is not connected, cannot home printer")
             return
+
+        #make sure we are in absolute positioning mode
+        self._logger.info("HomePrinter: setting absolute positioning mode")
+        self.ok_response = False
+        self.send_printer_command("G90")
+        while not self.ok_response:
+            pass
+        self._logger.info("HomePrinter: Absolute positioning mode set")
         
         maxPartHeight = self._settings.get(["maxPartHeight"])
 
@@ -159,6 +167,16 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info(f"Running Run_CMM_Probing function with probing mode {probing_mode} and output file name {output_file_name}")
         self._logger.info(f"lastProbedPoint {self.lastProbedPoint}")
 
+        #make sure we are in absolute positioning mode
+        self._logger.info("FullProbe: setting absolute positioning mode")
+        self.ok_response = False
+        self.send_printer_command("G90")
+        while not self.ok_response:
+            pass
+        self._logger.info("FullProbe: Absolute positioning mode set")
+
+        self._logger.info("FullProbe: Checking z height of printhead")
+
         #check z height of printhead, wait to move if not there
         CurrentHeadPosition = self.Get_Head_Position()
         if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
@@ -168,7 +186,11 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             while not self.ok_response:
                 pass
 
+        self._logger.info(f"FullProbe: Printhead at max part height, starting probing routine")
+
         input_coords = [[0,0]]
+
+        self._logger.info(f"FullProbe: checking probing mode {probing_mode}")
         
         if probing_mode == 'default':
             #run default probing routine
@@ -197,16 +219,23 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                 f.close()
             self._logger.info(f"Custom probing file {custom_file_name} read in, coords: {input_coords}")
 
+        self._logger.info("FullProbe: Done checking probing mode, starting probing routine")
+
         #run through coords and probe for actual procedure
         for coordinate in input_coords:
+            self._logger.info(f"FullProbe: moving to coordinate {coordinate}")
             #move to coordinate
             self.ok_response = False
             self.send_printer_command(f"G1 X{coordinate[0]} Y{coordinate[1]}")
             while not self.ok_response:
                 pass
+            
+            self._logger.info("FullProbe: coordinate reached, probing")
 
             #probe current position
             self.Probe_Current_Position()
+
+            self._logger.info("FullProbe: probing finished, moving to max part height")
 
             #check printhead z height just in case
             CurrentHeadPosition = self.Get_Head_Position()
@@ -216,7 +245,15 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                 self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
                 while not self.ok_response:
                     pass
-    
+            self._logger.info("FullProbe: at max part height, moving to next coordinate")
+
+        self._logger.info("FullProbe: Finished Probing Routine, moving out of the way")
+        self.ok_response = False
+        height = str(maxPartHeight + 50)
+        self.send_printer_command(f"G1 X0 Y0 Z{height}")
+        while not self.ok_response:
+            pass
+        self._logger.info(f"FullProbe: Finished moving out of the way. Finished probing routine with input_coords: {input_coords} and probing mode: {probing_mode}")
         return
 
     def Probe_Current_Position(self):
@@ -242,12 +279,17 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
             while not self.ok_response:
                 pass
-        return
 
-        #run probe command and wait for it to finish completely
-        self.g30_response = False
+        #run probe command and wait for it to finish completely, use g30 or ok response knowing real printer uses g30 and virtual uses ok
+
+        #self.g30_response = False
+        self.ok_response = False
         self.send_printer_command("G30")
-        while not self.g30_response:
+
+        # while not self.g30_response:
+        #     pass
+
+        while not self.ok_response:
             pass
 
         #now that we hit something, record the probed position
@@ -263,6 +305,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
         while not self.ok_response:
             pass
+
+        self._logger.info(f"Finished Probe_Current_Position function with output file name {output_file_name}, probing mode {probing_mode}, and noWrite mode {noWrite}, with max part height {maxPartHeight}")
         
         return
 
@@ -334,7 +378,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
             self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
             self.m114_parse = True
-            return
+            return line
 
         pattern = r"ok X:\d{1,4}\.\d{1,4} Y:\d{1,4}\.\d{1,4} Z:\d{1,4}\.\d{1,4} E:\d{1,4}\.\d{1,4} Count: A:\d{1,4} B:\d{1,4} C:\d{1,4}"
         if re.match(pattern, line) and self.g30_response == False:
@@ -350,12 +394,12 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
             self._logger.info(f"recent headpos from parse_g30 {self.headpos}")
             self.g30_response = True
-            return
+            return line
 
         pattern = r"ok"
         if re.match(pattern, line) and self.ok_response == False:
             self.ok_response = True
-            return
+            return line
         return line
 
     def get_assets(self):
