@@ -4,6 +4,8 @@ import os
 import datetime
 import requests
 import re
+import serial
+from octoprint.printer import PrinterInterface
 
 class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                     octoprint.plugin.TemplatePlugin,
@@ -112,26 +114,33 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             ))
 
     def home_printer(self):
+        #check printer connection
+        if not self._printer.is_operational():
+            self._logger.info("Printer is not connected, cannot home printer")
+            return
+        
         maxPartHeight = self._settings.get(["maxPartHeight"])
 
         #move printer up 10 mm
         self.ok_response = False
-        self._printer.commands(f"G1 Z10")
+        self.send_printer_command(f"G1 Z10")
         while not self.ok_response:
             pass
+        self._logger.info(f"printer current z height: {self.Get_Head_Position()[2]}")
 
         self.ok_response = False
         self._logger.info("Homing Printer funtion called")
-        self._printer.commands("G28")
+        self.send_printer_command("G28")
         while not self.ok_response:
             pass
 
         #move printer up to slide in part
         self.ok_response = False
-        height = maxPartHeight + 50
-        self._printer.commands(f"G1 {height}")
+        height = str(maxPartHeight + 50)
+        self.send_printer_command(f"G1 {height}")
         while not self.ok_response:
             pass
+        self._logger.info("Homing Printer funtion finished")
         return
 
     def Run_CMM_Probing(self):
@@ -155,7 +164,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
+            self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
             while not self.ok_response:
                 pass
 
@@ -192,7 +201,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         for coordinate in input_coords:
             #move to coordinate
             self.ok_response = False
-            self._printer.commands(f"G1 X{coordinate[0]} Y{coordinate[1]}")
+            self.send_printer_command(f"G1 X{coordinate[0]} Y{coordinate[1]}")
             while not self.ok_response:
                 pass
 
@@ -204,7 +213,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
                 self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
                 self.ok_response = False
-                self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
+                self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
                 while not self.ok_response:
                     pass
     
@@ -230,14 +239,14 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
+            self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
             while not self.ok_response:
                 pass
         return
 
         #run probe command and wait for it to finish completely
         self.g30_response = False
-        self._printer.commands("G30")
+        self.send_printer_command("G30")
         while not self.g30_response:
             pass
 
@@ -251,34 +260,34 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printhead back up to the safe z level
         self.ok_response = False
-        self._printer.commands(f"G1 Z{maxPartHeight + partHeightBuffer}")
+        self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
         while not self.ok_response:
             pass
         
         return
 
     def Get_Head_Position(self):
-        #send single gcode to printer with requests
-        # url = "/api/printer/command"
-        # payload = {"command": "M114"}
-        # headers = {
-        #  'Content-Type': 'application/json',
-        #  'X-Api-Key': self.APIKEY
-        #   }
-        # response = requests.post(url, json=payload, headers=headers)
 
         #send using simpleapiplugin
+
+        self._logger.info("getting head position")
         self.m114_parse = False
-        self._printer.commands("M114 R")
-
-        #then ideally it will be picked up and parsed by the gcode recieve hook
-
-        #wait for response
+        self.send_printer_command("M114")
         while not self.m114_parse:
             pass
+        self._logger.info(f"recent headpos from get_head_position {self.headpos}")
         
         #return updated headpos
         return self.headpos
+
+    def send_printer_command(self, command):
+        self._logger.info(f"sending command {command}")
+        #send single gcode 
+
+        self._printer.commands(command)
+
+        self._logger.info(f"sent command {command}")
+        return
 
     
     def Write_To_File(self, x_value, y_value, z_value, a_value, b_value, c_value):
