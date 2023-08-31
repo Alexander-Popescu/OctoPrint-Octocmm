@@ -96,7 +96,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}, printerClearance: {self._settings.get(['printerClearance'])}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}, printerClearance: {self._settings.get(['printerClearance'])}, self.ok_response: {self.ok_response}, self.m114_parse: {self.m114_parse}, self.g30_response: {self.g30_response}"
             ))
 
         elif request.args.get("command") == "home_printer":
@@ -135,7 +135,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printer up 10 mm
         self.ok_response = False
-        self.send_printer_command(f"G1 Z10")
+        self.send_printer_command("G1 Z10")
         while not self.ok_response:
             pass
 
@@ -146,7 +146,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printer up to slide in part
         self.ok_response = False
-        height = str(maxPartHeight + printerClearance)
+        height = str(int(maxPartHeight) + int(printerClearance))
         self.send_printer_command(f"G1 Z{height}")
         while not self.ok_response:
             pass
@@ -323,6 +323,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self.send_printer_command("M114")
         while not self.m114_parse:
             pass
+
         self._logger.info(f"Finished Get_Head_Position, returning {self.headpos}")
 
         #return updated headpos
