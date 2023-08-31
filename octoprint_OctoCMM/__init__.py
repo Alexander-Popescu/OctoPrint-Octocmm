@@ -38,6 +38,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             noWrite='False',
             maxPartHeight=50,#in millimeters
             partHeightBuffer=10,#in millimeters
+            printerClearance=50#in millimeters
         )
 
     def get_template_configs(self):
@@ -94,7 +95,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}, printerClearance: {self._settings.get(['printerClearance'])}"
             ))
 
         elif request.args.get("command") == "home_printer":
@@ -114,6 +115,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             ))
 
     def home_printer(self):
+        self._logger.info("Homing Printer funtion called")
         #check printer connection
         if not self._printer.is_operational():
             self._logger.info("Printer is not connected, cannot home printer")
@@ -128,26 +130,26 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("HomePrinter: Absolute positioning mode set")
         
         maxPartHeight = self._settings.get(["maxPartHeight"])
+        printerClearance = self._settings.get(["printerClearance"])
 
         #move printer up 10 mm
         self.ok_response = False
         self.send_printer_command(f"G1 Z10")
         while not self.ok_response:
             pass
-        self._logger.info(f"printer current z height: {self.Get_Head_Position()[2]}")
 
         self.ok_response = False
-        self._logger.info("Homing Printer funtion called")
         self.send_printer_command("G28")
         while not self.ok_response:
             pass
 
         #move printer up to slide in part
         self.ok_response = False
-        height = str(maxPartHeight + 50)
-        self.send_printer_command(f"G1 {height}")
+        height = str(maxPartHeight + printerClearance)
+        self.send_printer_command(f"G1 Z{height}")
         while not self.ok_response:
             pass
+
         self._logger.info("Homing Printer funtion finished")
         return
 
@@ -158,6 +160,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         noWrite = self._settings.get(["noWrite"])
         maxPartHeight = self._settings.get(["maxPartHeight"])
         partHeightBuffer = self._settings.get(["partHeightBuffer"])
+        printerClearance = self._settings.get(["printerClearance"])
 
         #check if printer connected
         if not self._printer.is_operational():
@@ -249,7 +252,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         self._logger.info("FullProbe: Finished Probing Routine, moving out of the way")
         self.ok_response = False
-        height = str(maxPartHeight + 50)
+        height = str(maxPartHeight + printerClearance)
         self.send_printer_command(f"G1 X0 Y0 Z{height}")
         while not self.ok_response:
             pass
@@ -314,13 +317,13 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #send using simpleapiplugin
 
-        self._logger.info("getting head position")
+        self._logger.info("Running Get_Head_Position")
         self.m114_parse = False
         self.send_printer_command("M114")
         while not self.m114_parse:
             pass
-        self._logger.info(f"recent headpos from get_head_position {self.headpos}")
-        
+        self._logger.info(f"Finished Get_Head_Position, returning {self.headpos}")
+
         #return updated headpos
         return self.headpos
 
