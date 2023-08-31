@@ -38,7 +38,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             noWrite='False',
             maxPartHeight=50,#in millimeters
             partHeightBuffer=10,#in millimeters
-            printerClearance=50#in millimeters
+            printerClearance=50,#in millimeters
+            virtualPrinterCMM='False',
         )
 
     def get_template_configs(self):
@@ -191,7 +192,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         self._logger.info(f"FullProbe: Printhead at max part height, starting probing routine")
 
-        input_coords = [[0,0]]
+        input_coords = []
 
         self._logger.info(f"FullProbe: checking probing mode {probing_mode}")
         
@@ -283,17 +284,17 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             while not self.ok_response:
                 pass
 
-        #run probe command and wait for it to finish completely, use g30 or ok response knowing real printer uses g30 and virtual uses ok
+        if self._settings.get(["virtualPrinterCMM"]) == 'True':
+            self.ok_response = False
+            self.send_printer_command("G30")
+            while not self.ok_response:
+                pass
+        else:
+            self.g30_response = False
+            self.send_printer_command("G30")
+            while not self.g30_response:
+                pass
 
-        #self.g30_response = False
-        self.ok_response = False
-        self.send_printer_command("G30")
-
-        # while not self.g30_response:
-        #     pass
-
-        while not self.ok_response:
-            pass
 
         #now that we hit something, record the probed position
         CurrentHeadPosition = self.Get_Head_Position()
