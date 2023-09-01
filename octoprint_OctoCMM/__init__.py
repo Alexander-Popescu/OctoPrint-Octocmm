@@ -96,7 +96,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("update_vars")
             return jsonify(dict(
                 status="success",
-                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}, printerClearance: {self._settings.get(['printerClearance'])}, self.ok_response: {self.ok_response}, self.m114_parse: {self.m114_parse}, self.g30_response: {self.g30_response}"
+                result=f"CMM State: {self.cmmState}, LastProbedPosition: {self.lastProbedPoint}, Probing Mode: {self._settings.get(['probing_mode'])}, Output File Name: {self._settings.get(['output_file_name'])}, noWrite: {self._settings.get(['noWrite'])}, maxPartHeight: {self._settings.get(['maxPartHeight'])}, partHeightBuffer: {self._settings.get(['partHeightBuffer'])}, printerClearance: {self._settings.get(['printerClearance'])}"
             ))
 
         elif request.args.get("command") == "home_printer":
