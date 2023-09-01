@@ -9,8 +9,8 @@ or manually using this URL:
 
     https://github.com/Alexander-Popescu/OctoPrint-Octocmm/archive/master.zip
 
-**TODO:** Details describing plugin operation will come eventually
+Setup and usage instructions are provided in the plugin tab of octoprint
 
 ## Configuration
 
-**TODO:** settings allow for different cmm tests to be performed
+Can be configured in the settings panel, all settings are described there
