@@ -5,6 +5,7 @@ import datetime
 import requests
 import re
 import serial
+import time
 from octoprint.printer import PrinterInterface
 
 class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
@@ -25,9 +26,11 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         #api key for sending commands to printer
         self.APIKEY = self._settings.global_get(["api","key"])
         #flags for certain gcodes since we have to parse manually
-        self.m114_parse = False
-        self.g30_response = False
-        self.ok_response = False
+        self.m114_parse = True
+        self.g30_response = True
+        self.ok_response = True
+
+        self.CurrentCoordinatesTesting = [-1, -1]
 
         
     def get_settings_defaults(self):
@@ -182,13 +185,18 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("FullProbe: Checking z height of printhead")
 
         #check z height of printhead, wait to move if not there
-        CurrentHeadPosition = self.Get_Head_Position()
-        if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
-            self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
+        self.Get_Head_Position()
+        if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
+            self._logger.info(f"Head is not at max part height, self.headpos[2] is {self.headpos[2]}, abd maxpartheight + partheightbuffer is {maxPartHeight + partHeightBuffer}moving to max part height plus buffer {maxPartHeight + partHeightBuffer}")
             self.ok_response = False
             self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
-            while not self.ok_response:
-                pass
+            #wait ten seconds
+            time.sleep(15)
+            #check height again
+            self.Get_Head_Position()
+            if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
+                self._logger.info(f"Head is still not at max part height in full probing, returning")
+                return
 
         self._logger.info(f"FullProbe: Printhead at max part height, starting probing routine")
 
@@ -199,7 +207,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         if probing_mode == 'default':
             #run default probing routine
             self._logger.info("Running default probing routine")
-            input_coords = [[25,25],[50,50],[100,100],[150,150]]
+            input_coords = [[50,50],[100,100],[150,150],[180,180]]
             self._logger.info(f"Default probing routine coords: {input_coords}")
         else:
             #run custom probing routine
@@ -228,11 +236,25 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         #run through coords and probe for actual procedure
         for coordinate in input_coords:
             self._logger.info(f"FullProbe: moving to coordinate {coordinate}")
+            self.CurrentCoordinatesTesting = coordinate
             #move to coordinate
             self.ok_response = False
             self.send_printer_command(f"G1 X{coordinate[0]} Y{coordinate[1]}")
-            while not self.ok_response:
-                pass
+            #wait 10 seconds
+            time.sleep(15)
+            #check if we are there
+            self.Get_Head_Position()
+            if int(float(self.headpos[0])) != coordinate[0] or int(float(self.headpos[1])) != coordinate[1]:
+                self._logger.info(f"FullProbe: not at coordinate {coordinate} in single point probe, trying again")
+                #try again
+                self.send_printer_command(f"G1 X{coordinate[0]} Y{coordinate[1]}")
+                #wait 10 seconds
+                time.sleep(15)
+                #check if we are there
+                self.Get_Head_Position()
+                if int(float(self.headpos[0])) != coordinate[0] or int(float(self.headpos[1])) != coordinate[1]:
+                    self._logger.info(f"FullProbe: not at coordinate {coordinate} in single point probe check 2, returning")
+                    return
             
             self._logger.info("FullProbe: coordinate reached, probing")
 
@@ -242,21 +264,31 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             self._logger.info("FullProbe: probing finished, moving to max part height")
 
             #check printhead z height just in case
-            CurrentHeadPosition = self.Get_Head_Position()
-            if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
+            self.Get_Head_Position()
+            if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
                 self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
                 self.ok_response = False
                 self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
-                while not self.ok_response:
-                    pass
+                #wait 10 seconds
+                time.sleep(15)
+                #check if we are there
+                self.Get_Head_Position()
+                if self.headpos[0] != coordinate[0] or self.headpos[1] != coordinate[1]:
+                    self._logger.info(f"FullProbe: not at coordinate {coordinate} in single point probe check 2, returning")
+                    return
             self._logger.info("FullProbe: at max part height, moving to next coordinate")
 
         self._logger.info("FullProbe: Finished Probing Routine, moving out of the way")
         self.ok_response = False
         height = str(maxPartHeight + printerClearance)
         self.send_printer_command(f"G1 X0 Y0 Z{height}")
-        while not self.ok_response:
-            pass
+        #wait 10 seconds
+        time.sleep(15)
+        #check if we are there
+        self.Get_Head_Position()
+        if self.headpos[2] != height:
+            self._logger.info(f"FullProbe: not at max part height {height} in single point probe check 2, returning")
+            return
         self._logger.info(f"FullProbe: Finished moving out of the way. Finished probing routine with input_coords: {input_coords} and probing mode: {probing_mode}")
         return
 
@@ -276,8 +308,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info(f"Running Probe_Current_Position function with output file name {output_file_name}, probing mode {probing_mode}, and noWrite mode {noWrite}, with max part height {maxPartHeight}")
 
         #check z height of printhead, wait to move if not there
-        CurrentHeadPosition = self.Get_Head_Position()
-        if CurrentHeadPosition[2] != maxPartHeight + partHeightBuffer:
+        self.Get_Head_Position()
+        if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
             self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
@@ -286,23 +318,27 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         if self._settings.get(["virtualPrinterCMM"]) == 'True':
             self.ok_response = False
-            self.send_printer_command("G30")
+            self.send_printer_command("G30 ETRUE")
             while not self.ok_response:
                 pass
         else:
             self.g30_response = False
-            self.send_printer_command("G30")
+            current_time = int(time.time())
+            self.send_printer_command("G30 ETRUE")
             while not self.g30_response:
+                if current_time + 30 < int(time.time()):
+                    self._logger.info("G30 timeout, returning")
+                    return
                 pass
 
 
         #now that we hit something, record the probed position
-        CurrentHeadPosition = self.Get_Head_Position()
-        self._logger.info(f"Head Position after G30: {CurrentHeadPosition}")
+        #we dont want to overwrite the current headpos as it was parsed from G30
+        self._logger.info(f"Head Position after G30: {self.headpos}")
 
         #write recent probe to file and update frontend var
-        self.Write_To_File(CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2], CurrentHeadPosition[3], CurrentHeadPosition[4], CurrentHeadPosition[5])
-        self.lastProbedPoint = {CurrentHeadPosition[0], CurrentHeadPosition[1], CurrentHeadPosition[2]}
+        self.Write_To_File(self.CurrentCoordinatesTesting[0], self.CurrentCoordinatesTesting[1], self.headpos[2], self.headpos[3], self.headpos[4], self.headpos[5])
+        self.lastProbedPoint = {self.headpos[0], self.headpos[1], self.headpos[2]}
 
         #move printhead back up to the safe z level
         self.ok_response = False
@@ -318,10 +354,18 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #send using simpleapiplugin
 
+        
         self._logger.info("Running Get_Head_Position")
         self.m114_parse = False
         self.send_printer_command("M114")
+        current_time = round(time.time())
         while not self.m114_parse:
+            # if (current_time + 5) < round(time.time()):
+            #     #resend command after 5 seconds
+            #     self._logger.info("5 seconds elapsed, resending command")
+            #     current_time = round(time.time())
+            #     self.m114_parse = False
+            #     self.send_printer_command("M114")
             pass
 
         self._logger.info(f"Finished Get_Head_Position, returning {self.headpos}")
@@ -354,8 +398,8 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
             open(output_file_name, 'x')
             #write header line
             with open(output_file_name, 'a') as f:
-                f.write("File Generated By OctoCMM, each entry is an x,y,z coordinate pair for a position recorded as the surface of the part, then the time the data was recorded. ABC values are from m114 output\n")
-                f.write("X,Y,Z,A,B,C,Time\n")
+                f.write("File Generated By OctoCMM, each entry is an x,y,z coordinate pair for a position recorded as the surface of the part, then the time the data was recorded. XYZ count values are from m114 output\n")
+                f.write("X,Y,Z,count_x,count_y,count_z,Time\n")
                 f.close()
         
         #write data to file
@@ -368,38 +412,45 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         
     def parse_gcode_responses(self, comm, line, *args, **kwargs):
         #checks for M114 response
-
-        pattern = r"ok X:\d+\.\d{1,4} Y:\d+\.\d{1,4} Z:\d+\.\d{1,4} E:\d+\.\d{1,4} Count: A:\d+ B:\d+ C:\d+"
+        pattern = r"\bX:\b"
         if re.match(pattern, line) and self.m114_parse == False:
             #parse line for x,y,z values
             self._logger.info(f"Received M114 response: {line}")
-            x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
-            y_value = re.search(r"Y:(\d+\.\d{1,2})", line).group(1)
-            z_value = re.search(r"Z:(\d+\.\d{1,2})", line).group(1)
-            a_value = re.search(r"A:(\d+)", line).group(1)
-            b_value = re.search(r"B:(\d+)", line).group(1)
-            c_value = re.search(r"C:(\d+)", line).group(1)
-            self._logger.info(f"M114 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
-            self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
-            self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
-            self.m114_parse = True
-            return line
+            pattern = r"X:(\d+\.\d{1,2})\s+Y:(\d+\.\d{1,2})\s+Z:(\d+\.\d{1,2})\s+E:(\d+\.\d{1,2})\s+Count\s+X:(\d+)\s+Y:(\d+)\s+Z:(\d+)"
+            match = re.search(pattern, line)
+            if match:
+                x_value = match.group(1)
+                y_value = match.group(2)
+                z_value = match.group(3)
+                e_value = match.group(4)
+                count_x = match.group(5)
+                count_y = match.group(6)
+                count_z = match.group(7)
+                self._logger.info(f"M114 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, countX: {count_x}, countY: {count_y}, countZ: {count_z}")
+                self.headpos = [x_value, y_value, z_value, count_x, count_y, count_z]
+                self._logger.info(f"recent headpos from parse_m114 {self.headpos}")
+                self.m114_parse = True
+                return line
+            else:
+                self._logger.info("M114 response not parsed correctly, returning")
+                return line
 
-        pattern = r"ok X:\d{1,4}\.\d{1,4} Y:\d{1,4}\.\d{1,4} Z:\d{1,4}\.\d{1,4} E:\d{1,4}\.\d{1,4} Count: A:\d{1,4} B:\d{1,4} C:\d{1,4}"
+        pattern = r"Bed"
         if re.match(pattern, line) and self.g30_response == False:
-            #G30 return code, ignore for now and set flag
-            self._logger.info(f"Received G30 response: {line}")
-            x_value = re.search(r"X:(\d+\.\d{1,2})", line).group(1)
-            y_value = re.search(r"Y:(\d+\.\d{1,2})", line).group(1)
-            z_value = re.search(r"Z:(\d+\.\d{1,2})", line).group(1)
-            a_value = re.search(r"A:(\d+)", line).group(1)
-            b_value = re.search(r"B:(\d+)", line).group(1)
-            c_value = re.search(r"C:(\d+)", line).group(1)
-            self._logger.info(f"G30 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}, A: {a_value}, B: {b_value}, C: {c_value}")
-            self.headpos = [x_value, y_value, z_value, a_value, b_value, c_value]
-            self._logger.info(f"recent headpos from parse_g30 {self.headpos}")
-            self.g30_response = True
-            return line
+            self._logger.info(f"detected g30 response {line}")
+            pattern = r"Bed X: (\d+\.\d+) Y: (\d+\.\d+) Z: (-?\d+\.\d+)"
+            match = re.search(pattern, line)
+            if match:
+                x_value = match.group(1)
+                y_value = match.group(2)
+                z_value = match.group(3)
+                self._logger.info(f"G30 parsed: X: {x_value}, Y: {y_value}, Z: {z_value}")
+                self.headpos = [x_value, y_value, z_value, -1, -1, -1]
+                self.g30_response = True
+                return line
+            else:
+                self._logger.info("G30 response not parsed correctly, returning")
+                return line
 
         pattern = r"ok"
         if re.match(pattern, line) and self.ok_response == False:
