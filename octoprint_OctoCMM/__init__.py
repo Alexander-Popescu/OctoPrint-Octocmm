@@ -186,15 +186,15 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #check z height of printhead, wait to move if not there
         self.Get_Head_Position()
-        if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
-            self._logger.info(f"Head is not at max part height, self.headpos[2] is {self.headpos[2]}, abd maxpartheight + partheightbuffer is {maxPartHeight + partHeightBuffer}moving to max part height plus buffer {maxPartHeight + partHeightBuffer}")
+        if int(float(self.headpos[2])) != (int(maxPartHeight) + int(partHeightBuffer)):
+            self._logger.info(f"Head is not at max part height, self.headpos[2] is {self.headpos[2]}, abd (int(maxPartHeight) + int(partHeightBuffer)) is {(int(maxPartHeight) + int(partHeightBuffer))}moving to max part height plus buffer {(int(maxPartHeight) + int(partHeightBuffer))}")
             self.ok_response = False
-            self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
+            self.send_printer_command(f"G1 Z{(int(maxPartHeight) + int(partHeightBuffer))}")
             #wait ten seconds
             time.sleep(15)
             #check height again
             self.Get_Head_Position()
-            if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
+            if int(float(self.headpos[2])) != (int(maxPartHeight) + int(partHeightBuffer)):
                 self._logger.info(f"Head is still not at max part height in full probing, returning")
                 return
 
@@ -252,7 +252,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
                 time.sleep(15)
                 #check if we are there
                 self.Get_Head_Position()
-                if int(float(self.headpos[0])) != coordinate[0] or int(float(self.headpos[1])) != coordinate[1]:
+                if float(self.headpos[0]) != float(coordinate[0]) or float(self.headpos[1]) != float(coordinate[1]):
                     self._logger.info(f"FullProbe: not at coordinate {coordinate} in single point probe check 2, returning")
                     return
             
@@ -265,28 +265,28 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
             #check printhead z height just in case
             self.Get_Head_Position()
-            if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
+            if int(float(self.headpos[2])) != (int(maxPartHeight) + int(partHeightBuffer)):
                 self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
                 self.ok_response = False
-                self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
+                self.send_printer_command(f"G1 Z{(int(maxPartHeight) + int(partHeightBuffer))}")
                 #wait 10 seconds
                 time.sleep(15)
                 #check if we are there
                 self.Get_Head_Position()
-                if self.headpos[0] != coordinate[0] or self.headpos[1] != coordinate[1]:
+                if float(self.headpos[0]) != float(coordinate[0]) or float(self.headpos[1]) != float(coordinate[1]):
                     self._logger.info(f"FullProbe: not at coordinate {coordinate} in single point probe check 2, returning")
                     return
             self._logger.info("FullProbe: at max part height, moving to next coordinate")
 
         self._logger.info("FullProbe: Finished Probing Routine, moving out of the way")
         self.ok_response = False
-        height = str(maxPartHeight + printerClearance)
+        height = str(int(maxPartHeight) + int(printerClearance))
         self.send_printer_command(f"G1 X0 Y0 Z{height}")
         #wait 10 seconds
         time.sleep(15)
         #check if we are there
         self.Get_Head_Position()
-        if self.headpos[2] != height:
+        if int(float(self.headpos[2])) != int(height):
             self._logger.info(f"FullProbe: not at max part height {height} in single point probe check 2, returning")
             return
         self._logger.info(f"FullProbe: Finished moving out of the way. Finished probing routine with input_coords: {input_coords} and probing mode: {probing_mode}")
@@ -309,10 +309,10 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #check z height of printhead, wait to move if not there
         self.Get_Head_Position()
-        if int(float(self.headpos[2])) != int(maxPartHeight + partHeightBuffer):
+        if int(float(self.headpos[2])) != (int(maxPartHeight) + int(partHeightBuffer)):
             self._logger.info(f"Head is not at max part height, moving to max part height {maxPartHeight}")
             self.ok_response = False
-            self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
+            self.send_printer_command(f"G1 Z{(int(maxPartHeight) + int(partHeightBuffer))}")
             while not self.ok_response:
                 pass
 
@@ -342,7 +342,7 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         #move printhead back up to the safe z level
         self.ok_response = False
-        self.send_printer_command(f"G1 Z{maxPartHeight + partHeightBuffer}")
+        self.send_printer_command(f"G1 Z{(int(maxPartHeight) + int(partHeightBuffer))}")
         while not self.ok_response:
             pass
 
@@ -412,11 +412,11 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
         
     def parse_gcode_responses(self, comm, line, *args, **kwargs):
         #checks for M114 response
-        pattern = r"\bX:\b"
+        pattern = r"X:"
         if re.match(pattern, line) and self.m114_parse == False:
             #parse line for x,y,z values
             self._logger.info(f"Received M114 response: {line}")
-            pattern = r"X:(\d+\.\d{1,2})\s+Y:(\d+\.\d{1,2})\s+Z:(\d+\.\d{1,2})\s+E:(\d+\.\d{1,2})\s+Count\s+X:(\d+)\s+Y:(\d+)\s+Z:(\d+)"
+            pattern = r"X:(-?\d+\.\d{2})\s+Y:(-?\d+\.\d{2})\s+Z:(-?\d+\.\d{2})\s+E:(\d+\.\d{2})\s+Count\s+X:(-?\d+)\s+Y:(-?\d+)\s+Z:(-?\d+)"
             match = re.search(pattern, line)
             if match:
                 x_value = match.group(1)
