@@ -280,13 +280,13 @@ class OctoCmmPlugin(octoprint.plugin.StartupPlugin,
 
         self._logger.info("FullProbe: Finished Probing Routine, moving out of the way")
         self.ok_response = False
-        height = str(maxPartHeight + printerClearance)
+        height = str(int(maxPartHeight) + int(printerClearance))
         self.send_printer_command(f"G1 X0 Y0 Z{height}")
         #wait 10 seconds
         time.sleep(15)
         #check if we are there
         self.Get_Head_Position()
-        if self.headpos[2] != height:
+        if int(float(self.headpos[2])) != int(height):
             self._logger.info(f"FullProbe: not at max part height {height} in single point probe check 2, returning")
             return
         self._logger.info(f"FullProbe: Finished moving out of the way. Finished probing routine with input_coords: {input_coords} and probing mode: {probing_mode}")
